@@ -1,0 +1,23 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: mariadb-backup-volume-template
+metadata:
+  name: mariadb-backup-volume
+objects:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: mariadb-backup-pv-claim
+      namespace: ${OPENSHIFT_NAMESPACE}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: ${STORAGE_SPACE} #20Gi
+      storageClassName: standard
+      volumeMode: Filesystem
+parameters:
+  - name: OPENSHIFT_NAMESPACE
+  - name: STORAGE_SPACE

@@ -1,0 +1,31 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: mariadb-service-template
+metadata:
+  name: mariadb-service
+objects:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+        name: mariadb
+        namespace: ${OPENSHIFT_NAMESPACE}
+        labels:
+            mcs-idle: 'false'
+            template: mariadb-persistent-template
+        annotations:
+            template.openshift.io/expose-uri: 'mysql://{.spec.clusterIP}:{.spec.ports[?(.name=="mariadb")].port}'
+    spec:
+      ports:
+        - name: mariadb
+          protocol: TCP
+          port: 3306
+          targetPort: 3306
+      selector:
+          name: mariadb
+      type: ClusterIP
+      sessionAffinity: None
+    status:
+      loadBalancer: {}
+parameters:
+  - name: OPENSHIFT_NAMESPACE

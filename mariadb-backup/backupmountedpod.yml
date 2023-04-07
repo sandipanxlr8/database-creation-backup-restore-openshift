@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backupman
+spec:
+  selector:
+    matchLabels:
+      app: backupman
+  template:
+    metadata:
+      labels:
+        app: backupman
+    spec:
+      volumes:
+        - name: backup-store
+          persistentVolumeClaim:
+            claimName: mariadb-backup-pv-claim
+        - name: kubeconfig
+          emptyDir: {}
+      imagePullSecrets:
+        - name: <openshift-secret-name>
+      containers:
+        - name: mounty
+          image: <your-openshift-image>
+          command:
+            - "/bin/sh"
+            - "-c"
+          args:
+            - "while true; do sleep 60; done"
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+          volumeMounts:
+            - mountPath: "/opt/backup"
+              name: backup-store
+            - mountPath: "/opt/config"
+              name: kubeconfig
+          env:
+            - name: KUBECONFIG
+              value: /opt/config/kubeconfig

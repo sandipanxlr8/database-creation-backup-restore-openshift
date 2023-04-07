@@ -1,0 +1,46 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: maria-backuppod-template
+metadata:
+  name: maria-backup
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: maria-backup
+      labels:
+        name: maria-backup
+    spec:
+      metadata:
+      name: maria-backup
+      spec:
+      volumes:
+        - name: backup-store
+          persistentVolumeClaim:
+            claimName: mariadb-backup-pv-claim-cephfs
+      imagePullSecrets:
+        - name: <your-openshift-image>
+      containers:
+        - name: mariadump
+          image: <mariadb-backup-image>
+          env:
+            - name: DBPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb
+                  key: database-root-password
+            - name: DBHOST
+              value: mariadb
+            - name: BACKUP_RETENTION_DAILY
+              value: "4"
+            - name: BACKUP_RETENTION_WEEKLY
+              value: "2"
+            - name: BACKUP_RETENTION_MONTHLY
+              value: "1"
+          volumeMounts:
+            - mountPath: "/opt/backup"
+              name: backup-store
+      restartPolicy: OnFailure
+parameters:
+  - name: IMAGE_VERSION

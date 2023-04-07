@@ -1,0 +1,37 @@
+image: docker:latest
+
+variables:
+  OPENSHIFT_URL: <your-openshift-url>
+  OPENSHIFT_NAMESPACE: <your-openshift-namespace>
+  STORAGE_SPACE: 60Gi
+
+stages:
+  - deploy
+
+appagile-deploy:
+  image: <your-openshift-image>
+  stage: deploy
+  tags:
+    - run_docker
+  script:
+    - oc login $OPENSHIFT_URL --token=$OPENSHIFT_TOKEN
+    - oc project $OPENSHIFT_NAMESPACE
+
+    # DELETE DEPLOYMENT_CONFIG, SERVICE, SECRET, PERSISTENT VOLUME CLAIM
+    #- (oc delete secrets mariadb -n $OPENSHIFT_NAMESPACE) || true
+    #- (oc delete service mariadb -n $OPENSHIFT_NAMESPACE) || true
+    #- (oc delete dc mariadb -n $OPENSHIFT_NAMESPACE) || true
+    #- (oc delete pvc/mariadb-pv-claim -n $OPENSHIFT_NAMESPACE) || true
+
+    # STEP 1: CREATE MARIADB PERSISTENT VOLUME CLAIM
+    - (oc process -f persistentVolumeClaim.yml -p OPENSHIFT_NAMESPACE=$OPENSHIFT_NAMESPACE -p STORAGE_SPACE=$STORAGE_SPACE | oc create -f -) || true
+
+    # STEP 2: CREATE MARIADB SECRETS
+    - (oc process -f secrets.yml -p MARIADB_ROOT_PASSWORD=$MARIADB_ROOT_PASSWORD    -p MARIADB_DATABASE=$MARIADB_DATABASE -p MARIADB_PASSWORD=$MARIADB_PASSWORD -p MARIADB_USER=$MARIADB_USER  | oc create -f - ) || true
+
+    # STEP 3: CREATE DEPLOYMENT CONFIG
+    - (oc process -f deploymentConfig.yml -p OPENSHIFT_NAMESPACE=$OPENSHIFT_NAMESPACE | oc create -f -) || true
+
+    # STEP 4: CREATE SERVICE
+    - (oc process -f service.yml -p OPENSHIFT_NAMESPACE=$OPENSHIFT_NAMESPACE | oc create -f -) || true
+  when: manual

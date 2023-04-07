@@ -1,0 +1,50 @@
+image: docker:latest
+
+variables:
+  OPENSHIFT_URL: https://api.ocp501.tc-npr.aws.telekom.de:6443
+  OPENSHIFT_NAMESPACE: dive-qa
+
+  RESOURCE_PATH: "$CI_PROJECT_DIR/resource"
+  DOCKER_DRIVER: overlay2
+  DOCKER_REGISTRY: mtr.devops.telekom.de # Ziel Docker Registry - hier: Magenta Trusted Registry
+  DOCKER_NAMESPACE: dive # Ziel Docker Team Namespace
+  IMAGE_NAME: mariadb-restore # Name des Docker Images
+  IMAGE_PULL_SECRET_NAME: <your-openshift-image>
+  IMAGE_VERSION: 0.0.7
+  STORAGE_SPACE: 60Gi
+
+stages:
+  - package
+  - deploy
+
+.docker-package:
+  stage: package
+  image: docker:19.03.8
+  tags:
+    - run02_docker
+  services:
+    - docker:stable-dind
+  script:
+    #- cp Dockerfile Dockerfile
+    - export NO_PROXY=docker
+    - docker login $DOCKER_REGISTRY -u="$NEW_MTR_MAGBUS_DOCKER_USERNAME" -p="$NEW_MTR_MAGBUS_DOCKER_PASSWORD" # Robot User Magbus
+    - docker build -t $DOCKER_REGISTRY/$DOCKER_NAMESPACE/$IMAGE_NAME:$IMAGE_VERSION -t $DOCKER_REGISTRY/$DOCKER_NAMESPACE/$IMAGE_NAME:$IMAGE_VERSION . # mit Pipeline Id und latest taggen
+    - docker logout
+    - docker login $DOCKER_REGISTRY -u="$NEW_MTR_DIVE_DOCKER_USERNAME" -p="$NEW_MTR_DIVE_DOCKER_PASSWORD" # Robot User
+    - docker push $DOCKER_REGISTRY/$DOCKER_NAMESPACE/$IMAGE_NAME:$IMAGE_VERSION
+
+appagile-deploy:
+  image: mtr.devops.telekom.de/magbus/openshift:latest # Image mit OpenShift CLI
+  stage: deploy
+  tags:
+    - run_docker
+  script:
+    - oc login $OPENSHIFT_URL --token=$OPENSHIFT_TOKEN
+    - oc project $OPENSHIFT_NAMESPACE
+
+    #- (oc delete deployment backupman)|| true
+    #- (oc process -f  mariadbVolumeClaim.yml -p OPENSHIFT_NAMESPACE=$OPENSHIFT_NAMESPACE  -p STORAGE_SPACE=$STORAGE_SPACE | oc create -f -)||true
+    - (oc delete pod maria-restore) || true
+    - (oc process -f pod.yml -p IMAGE_VERSION=$IMAGE_VERSION | oc create -f -)|| true
+  #- oc create -f backupmountedpod.yml
+  when: manual

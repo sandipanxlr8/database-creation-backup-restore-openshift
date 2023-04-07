@@ -1,0 +1,52 @@
+image: docker:latest
+
+variables:
+  OPENSHIFT_URL: <your-openshift-url>
+  OPENSHIFT_NAMESPACE: <your-openshift-namespace>
+  STORAGE_SPACE: 120Gi
+  IMAGE_VERSION: 0.0.2
+  DOCKER_REGISTRY: <your-registry-url>
+  DOCKER_NAMESPACE: <your-registry-namespace>
+  IMAGE_NAME: maria-backup
+  IMAGE_PULL_SECRET_NAME: <your-openshift-secret-name>
+
+stages:
+  - package
+  - deploy
+
+.docker-package:
+  stage: package
+  image: docker:19.03.8
+  tags:
+    - run02_docker
+  services:
+    - docker:stable-dind
+  script:
+    - export DOCKER_API_VERSION=1.38
+    - cp scripts/Dockerfile Dockerfile
+    - cp scripts/backup.sh backup.sh
+    - export NO_PROXY=docker
+    - docker login $DOCKER_REGISTRY -u="$REGISTRY_USERNAME" -p="$REGISTRY_PASSWORD" # Robot User
+    - docker push $DOCKER_REGISTRY/$DOCKER_NAMESPACE/$IMAGE_NAME:$IMAGE_VERSION
+
+appagile-deploy:
+  image: <your-openshift-image>
+  stage: deploy
+  tags:
+    - run_docker
+  script:
+    - oc login $OPENSHIFT_URL --token=$OPENSHIFT_TOKEN
+    - oc project $OPENSHIFT_NAMESPACE
+
+    #Delete
+    #- (oc delete deployment backupman) || true
+    #- (oc delete jobs -l maria-backup) || true
+    #- (oc delete cronjob/maria-backup) || true
+    #- (oc delete pod maria-backup) || true
+
+    #Create
+    #- (oc process -f mariadbBackupVolumeClaim.yml -p OPENSHIFT_NAMESPACE=$OPENSHIFT_NAMESPACE -p STORAGE_SPACE=$STORAGE_SPACE| oc create -f -)|| true
+    - (oc process -f cron.yml -p IMAGE_VERSION=$IMAGE_VERSION| oc create -f -)|| true
+    - (oc process -f pod.yml -p IMAGE_VERSION=$IMAGE_VERSION| oc create -f -)|| true
+    - (oc create -f backupmountedpod.yml) || true
+    when: manual

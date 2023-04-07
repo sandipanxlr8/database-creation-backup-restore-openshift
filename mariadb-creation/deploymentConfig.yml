@@ -1,0 +1,132 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: mariadb-deployment-config-template
+metadata:
+  name: mariadb-deployment-config
+objects:
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+        name: mariadb
+        generation: 10
+        namespace: ${OPENSHIFT_NAMESPACE}
+        labels:
+            template: mariadb
+    spec:
+        strategy:
+            type: Recreate
+            recreateParams:
+            timeoutSeconds: 600
+            resources: {}
+            activeDeadlineSeconds: 21600
+        triggers:
+            -   type: ImageChange
+                imageChangeParams:
+                    automatic: true
+                    containerNames:
+                        - mariadb
+                    from:
+                        kind: ImageStreamTag
+                        namespace: openshift
+                        name: 'mariadb:10.2'
+                    lastTriggeredImage: >-
+                        image-registry.openshift-image-registry.svc:5000/openshift/mariadb
+            -   type: ConfigChange
+        replicas: 1
+        revisionHistoryLimit: 10
+        test: false
+        selector:
+            name: mariadb
+        template:
+            metadata:
+                creationTimestamp: null
+                labels:
+                    name: mariadb
+            spec:
+                volumes:
+                  - name: mariadb-data
+                    persistentVolumeClaim:
+                        claimName: mariadb-pv-claim
+                containers:
+                 -  resources:
+                        limits:
+                        memory: 512Mi
+                    readinessProbe:
+                        exec:
+                            command:
+                                - /bin/sh
+                                - '-i'
+                                - '-c'
+                                - MYSQL_PWD="$MYSQL_PASSWORD" mysqladmin -u $MYSQL_USER ping
+                        initialDelaySeconds: 5
+                        timeoutSeconds: 1
+                        periodSeconds: 10
+                        successThreshold: 1
+                        failureThreshold: 3
+                    terminationMessagePath: /dev/termination-log
+                    name: mariadb
+                    livenessProbe:
+                        exec:
+                            command:
+                                - /bin/sh
+                                - '-i'
+                                - '-c'
+                                - MYSQL_PWD="$MYSQL_PASSWORD" mysqladmin -u $MYSQL_USER ping
+                        initialDelaySeconds: 30
+                        timeoutSeconds: 1
+                        periodSeconds: 10
+                        successThreshold: 1
+                        failureThreshold: 3
+                    env:
+                        -   name: MYSQL_USER
+                            valueFrom:
+                                secretKeyRef:
+                                    name: mariadb
+                                    key: database-user
+                        -   name: MYSQL_PASSWORD
+                            valueFrom:
+                                secretKeyRef:
+                                    name: mariadb
+                                    key: database-password
+                        -   name: MYSQL_ROOT_PASSWORD
+                            valueFrom:
+                                secretKeyRef:
+                                    name: mariadb
+                                    key: database-root-password
+                        -   name: MYSQL_DATABASE
+                            valueFrom:
+                                secretKeyRef:
+                                    name: mariadb
+                                    key: database-name
+                        -   name: MYSQL_MAX_CONNECTIONS
+                            value: '800'
+                    ports:
+                        -   containerPort: 3306
+                            protocol: TCP
+                    imagePullPolicy: IfNotPresent
+                    volumeMounts:
+                            -   name: mariadb-data
+                                mountPath: /var/lib/mysql/data
+                    terminationMessagePolicy: File
+                    image: >-
+                        image-registry.openshift-image-registry.svc:5000/openshift/mariadb
+            restartPolicy: Always
+            terminationGracePeriodSeconds: 30
+            dnsPolicy: ClusterFirst
+            securityContext: {}
+            schedulerName: default-scheduler
+    status:
+        observedGeneration: 10
+        details:
+            message: config change
+            causes:
+                - type: ConfigChange
+        availableReplicas: 1
+        unavailableReplicas: 0
+        latestVersion: 1
+        updatedReplicas: 1
+        replicas: 1
+        readyReplicas: 1
+parameters:
+  - name: OPENSHIFT_NAMESPACE

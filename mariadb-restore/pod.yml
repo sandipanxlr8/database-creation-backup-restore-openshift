@@ -1,0 +1,40 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: maria-restore-template
+metadata:
+  name: maria-restore
+objects:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: maria-restore
+      labels:
+        name: maria-restore
+    spec:
+      metadata:
+      name: maria-restore
+      spec:
+      volumes:
+        - name: backup-store
+          persistentVolumeClaim:
+            claimName: mariadb-backup-pv-claim
+      imagePullSecrets:
+        - name: <your-openshift-image>
+      containers:
+        - name: mariarestore
+          image: <mariadb-backup-image>
+          env:
+            - name: DBPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb
+                  key: database-root-password
+            - name: DBHOST
+              value: mariadb
+          volumeMounts:
+            - mountPath: "/opt/backup"
+              name: backup-store
+      restartPolicy: OnFailure
+parameters:
+  - name: IMAGE_VERSION

@@ -1,0 +1,48 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: mariadb-secret-template
+metadata:
+  name: mariadb-secret
+objects:
+  - apiVersion: batch/v1beta1
+    kind: CronJob
+    metadata:
+      name: maria-backup
+    spec:
+      schedule: "0 3 * * *"
+      jobTemplate:
+        metadata:
+          name: maria-backup
+        spec:
+          template:
+            metadata:
+              name: maria-backup
+            spec:
+              volumes:
+                - name: backup-store
+                  persistentVolumeClaim:
+                    claimName: mariadb-backup-store
+              imagePullSecrets:
+                - name: <your-openshift-image>
+              containers:
+                - name: mariadump
+                  image: <mariadb-backup-image>
+                  env:
+                    - name: DBPASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: mariadb
+                          key: database-root-password
+                    - name: DBHOST
+                      value: mariadb
+                    - name: BACKUP_RETENTION_DAILY
+                      value: "6"
+                    - name: BACKUP_RETENTION_WEEKLY
+                      value: "3"
+                    - name: BACKUP_RETENTION_MONTHLY
+                      value: "3"
+                  volumeMounts:
+                    - mountPath: "/opt/backup"
+                      name: backup-store
+              restartPolicy: OnFailure
